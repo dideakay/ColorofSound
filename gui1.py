@@ -1,11 +1,15 @@
+from ast import Break
+import threading
 import tkinter as tk
+from tkinter import *
 from tkinter import ttk
 import numpy as np
 import pyaudio
 
 class AudioListener():
+    is_listening = True
     def __init__(self, *args, **kwargs):
-        print(args)
+        
         self.NOTE_MIN = 60       # C4
         self.NOTE_MAX = 69       # A4
         self.FSAMP = 22050       # Sampling frequency in Hz
@@ -44,8 +48,9 @@ class AudioListener():
         # Create Hanning window function
         window = 0.5 * (1 - np.cos(np.linspace(0, 2*np.pi, self.SAMPLES_PER_FFT, False)))
 
-        while (self.stream.is_active()):
-            
+        while (self.stream.is_active() and self.is_listening):
+            if (self.is_listening==False):
+                Break
             # Shift the buffer down and new data in
             self.buf[:-self.FRAME_SIZE] = self.buf[self.FRAME_SIZE:]
             self.buf[-self.FRAME_SIZE:] = np.fromstring(self.stream.read(self.FRAME_SIZE), np.int16)
@@ -73,27 +78,38 @@ class App(tk.Tk):
 
         # configure the root window
         self.title('Dides Tuner')
-        self.geometry('300x50')
+        self.geometry('300x150')
 
         # label
-        self.label = ttk.Label(self, text='Hello, Press to start! You can read the notes from console output!')
+        self.label = tk.Label(self, text='Hello, Press to start! You can read the notes from console output!')
         self.label.pack()
         
         # button
-        self.btn = tk.Button(self, text="Press", command=lambda: button_clicked(self))
-        self.btn.pack()
+        self.btnStart = tk.Button(self, text="Start", command=lambda: self.start_clicked())
+        self.btnStart.pack()
 
-        listener = AudioListener()
+        self.btnStop = tk.Button(self, text="Stop", command=lambda: self.stop_clicked())
+        self.btnStop.pack()
+
+        self.listener = AudioListener()
+
+        self.listenLoopThread = threading.Thread(target= self.listener.listenLoop, daemon=True)
     
-        def startListening(self):
-            listener.__init__(listener)
-            listener.listenLoop()
-
-        def button_clicked(self):
-            startListening(self)
-
+    def stop_clicked(self):
+        self.listener.is_listening = False
+        self.listenLoopThread.join()
+        self.listener = AudioListener()
+        self.listenLoopThread = threading.Thread(target= self.listener.listenLoop, daemon=True)
+        self.btnStart['state'] = NORMAL
+        self.btnStop['state'] = DISABLED
         
-            
+
+    def start_clicked(self):
+        self.listener.is_listening = True
+        self.listenLoopThread.start()
+        self.btnStart['state'] = DISABLED
+        self.btnStop['state'] = NORMAL
+      
 if __name__ == "__main__":
     app = App()
     app.mainloop()
