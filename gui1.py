@@ -1,4 +1,5 @@
 from ast import Break
+from cProfile import label
 import threading
 import tkinter as tk
 from tkinter import *
@@ -6,8 +7,10 @@ from tkinter import ttk
 import numpy as np
 import pyaudio
 
+frequency = "Not Listening"
 class AudioListener():
     is_listening = True
+    global labelGlobal
     def __init__(self, *args, **kwargs):
         
         self.NOTE_MIN = 60       # C4
@@ -41,7 +44,8 @@ class AudioListener():
 
     def note_to_fftbin(self, n): return self.number_to_freq(n)/self.FREQ_STEP
 
-    def listenLoop(self):
+    def listenLoop(self, mainApp):
+        global frequency
         num_frames = 0
         self.stream.start_stream()
 
@@ -49,8 +53,7 @@ class AudioListener():
         window = 0.5 * (1 - np.cos(np.linspace(0, 2*np.pi, self.SAMPLES_PER_FFT, False)))
 
         while (self.stream.is_active() and self.is_listening):
-            if (self.is_listening==False):
-                Break
+            
             # Shift the buffer down and new data in
             self.buf[:-self.FRAME_SIZE] = self.buf[self.FRAME_SIZE:]
             self.buf[-self.FRAME_SIZE:] = np.fromstring(self.stream.read(self.FRAME_SIZE), np.int16)
@@ -69,19 +72,23 @@ class AudioListener():
             num_frames += 1
 
             if num_frames >= self.FRAMES_PER_FFT:
-                print ('freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(
-                    freq, self.note_name(n0), n-n0))
+                frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.note_name(n0), n-n0)
+                print(frequency)
+                #mainApp.setFrequency(frequency)
+                #print ('freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.note_name(n0), n-n0))
+                #mainApp.frequencyLabel["text"] = result
 
 class App(tk.Tk):
+    global frequency
     def __init__(self, *args, **kwargs):
         super().__init__()
 
         # configure the root window
         self.title('Dides Tuner')
-        self.geometry('300x150')
+        self.geometry('400x150')
 
         # label
-        self.label = tk.Label(self, text='Hello, Press to start! You can read the notes from console output!')
+        self.label = tk.Label(self, text='Hello, Press to start!')
         self.label.pack()
         
         # button
@@ -91,17 +98,22 @@ class App(tk.Tk):
         self.btnStop = tk.Button(self, text="Stop", command=lambda: self.stop_clicked())
         self.btnStop.pack()
 
+        self.frequencyLabel = tk.Label(self, text=frequency)
+        self.frequencyLabel.pack()
+        self.frequencyLabel.after(1000, self.update)
+
         self.listener = AudioListener()
 
-        self.listenLoopThread = threading.Thread(target= self.listener.listenLoop, daemon=True)
+        self.listenLoopThread = threading.Thread(target=lambda: self.listener.listenLoop(self), daemon=True)
     
     def stop_clicked(self):
+        print(frequency)
         self.listener.is_listening = False
         self.listenLoopThread.join()
-        self.listener = AudioListener()
-        self.listenLoopThread = threading.Thread(target= self.listener.listenLoop, daemon=True)
+        self.listenLoopThread = threading.Thread(target= lambda: self.listener.listenLoop(self), daemon=True)
         self.btnStart['state'] = NORMAL
         self.btnStop['state'] = DISABLED
+        self.frequencyLabel["text"]="Not Listening"
         
 
     def start_clicked(self):
@@ -109,6 +121,14 @@ class App(tk.Tk):
         self.listenLoopThread.start()
         self.btnStart['state'] = DISABLED
         self.btnStop['state'] = NORMAL
+    
+    def update(self):
+    # update the label every 1 second 
+        if(self.listener.is_listening == True):
+            self.frequencyLabel.configure(text=frequency)
+
+        # schedule another timer
+        self.frequencyLabel.after(1000, self.update)
       
 if __name__ == "__main__":
     app = App()
