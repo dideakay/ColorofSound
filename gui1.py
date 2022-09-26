@@ -1,9 +1,8 @@
-from ast import Break
-from cProfile import label
 import threading
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk
+from turtle import bgcolor
 import numpy as np
 import pyaudio
 
@@ -13,19 +12,22 @@ class AudioListener():
     global labelGlobal
     def __init__(self, *args, **kwargs):
         
-        self.NOTE_MIN = 60       # C4
-        self.NOTE_MAX = 69       # A4
-        self.FSAMP = 22050       # Sampling frequency in Hz
-        self.FRAME_SIZE = 2048   # How many samples per frame?
-        self.FRAMES_PER_FFT = 16 # FFT takes average across how many frames?
+        self.NOTE_MIN = 40      # E2
+        self.NOTE_MAX = 88       # E6
+        #self.NOTE_MIN_FREQ =
+        self.NOTE_MAX_FREQ =  1318.51 # E6
+
+        self.FSAMP = 48000       # Sampling frequency in Hz
+        self.FRAME_SIZE = 1024   # How many samples per frame?
+        self.FRAMES_PER_FFT = 50 # FFT takes average across how many frames?
 
         self.SAMPLES_PER_FFT = self.FRAME_SIZE*self.FRAMES_PER_FFT
         self.FREQ_STEP = float(self.FSAMP)/self.SAMPLES_PER_FFT
-
+        
         self.NOTE_NAMES = 'C C# D D# E F F# G G# A A# B'.split()
 
-        self.imin = max(0, int(np.floor(self.note_to_fftbin(self.NOTE_MIN-1))))
-        self.imax = min(self.SAMPLES_PER_FFT, int(np.ceil(self.note_to_fftbin(self.NOTE_MAX+1))))
+        self.imin = max(0, int(np.floor(self.note_to_fftbin(self.NOTE_MIN-1)))) # n = 1 if note min is even
+        self.imax = min(self.SAMPLES_PER_FFT, int(np.ceil(self.note_to_fftbin(self.NOTE_MAX))))
 
         # Allocate space to run an FFT. 
         self.buf = np.zeros(self.SAMPLES_PER_FFT, dtype=np.float32)
@@ -35,14 +37,19 @@ class AudioListener():
                                         channels=1,
                                         rate=self.FSAMP,
                                         input=True,
+                                        output=False,
                                         frames_per_buffer=self.FRAME_SIZE)
 
        
-    def freq_to_number(self, f): return 69 + 12*np.log2(f/440.0)
+    def freq_to_number(self, f): return 69 + 12*np.log2(f/440)
     def number_to_freq(self, n): return 440 * 2.0**((n-69)/12.0)
     def note_name(self, n): return self.NOTE_NAMES[n % 12] + str(n/12 - 1)
 
     def note_to_fftbin(self, n): return self.number_to_freq(n)/self.FREQ_STEP
+
+    def change_color(self):
+            global bgcolor
+            bgcolor = '#40E0D0'
 
     def listenLoop(self, mainApp):
         global frequency
@@ -74,24 +81,29 @@ class AudioListener():
             if num_frames >= self.FRAMES_PER_FFT:
                 frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.note_name(n0), n-n0)
                 print(frequency)
-                #mainApp.setFrequency(frequency)
-                #print ('freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.note_name(n0), n-n0))
-                #mainApp.frequencyLabel["text"] = result
+                self.change_color()
+
+        
 
 class App(tk.Tk):
     global frequency
+    global bg_color
     def __init__(self, *args, **kwargs):
         super().__init__()
 
         # configure the root window
         self.title('Dides Tuner')
         self.geometry('400x150')
+        
+        bg_color = '#40E0D0'
+        self.configure(bg=bg_color)
+        self.after(100, self.update_bg)
 
         # label
         self.label = tk.Label(self, text='Hello, Press to start!')
         self.label.pack()
         
-        # button
+        # buttons
         self.btnStart = tk.Button(self, text="Start", command=lambda: self.start_clicked())
         self.btnStart.pack()
 
@@ -103,9 +115,8 @@ class App(tk.Tk):
         self.frequencyLabel.after(1000, self.update)
 
         self.listener = AudioListener()
-
         self.listenLoopThread = threading.Thread(target=lambda: self.listener.listenLoop(self), daemon=True)
-    
+        
     def stop_clicked(self):
         print(frequency)
         self.listener.is_listening = False
@@ -115,7 +126,6 @@ class App(tk.Tk):
         self.btnStop['state'] = DISABLED
         self.frequencyLabel["text"]="Not Listening"
         
-
     def start_clicked(self):
         self.listener.is_listening = True
         self.listenLoopThread.start()
@@ -129,6 +139,11 @@ class App(tk.Tk):
 
         # schedule another timer
         self.frequencyLabel.after(1000, self.update)
+
+    def update_bg(self):
+        self.configure(bg=bg_color)
+        self.after(100, self.update_bg)
+
       
 if __name__ == "__main__":
     app = App()
