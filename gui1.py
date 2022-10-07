@@ -8,6 +8,7 @@ from tkinter import ttk
 import numpy as np
 import pyaudio
 from pyaudio import PyAudio, paInt16
+import math
 
 frequency = "Not Listening"
 class ColorCalculator():
@@ -40,6 +41,73 @@ class ColorCalculator():
         else:
             bg_color='#99ff00'
         return bg_color
+    
+    @staticmethod
+    def sound_frequency_to_wavelength(frequency):
+        for i in range(0,50):
+            upper_octave_freq=frequency*math.pow(2, i)
+            upper_octave_freq_THz=upper_octave_freq/(math.pow(10,12))
+            upper_octave_freq_wavelenght=upper_octave_freq_THz*100
+            if(upper_octave_freq_wavelenght>= 380.0 and upper_octave_freq_wavelenght<= 780.0):
+                return upper_octave_freq_wavelenght
+        return 0
+
+
+    def WaveLength_to_RGB(WaveLength):
+        R = 0
+        G = 0
+        B = 0
+        if ((WaveLength >= 380.0) and (WaveLength <= 410.0)):
+            R =0.6-0.41*(410.0-WaveLength)/30.0
+            G = 0.0
+            B = 0.39+0.6*(410.0-WaveLength)/30.0
+
+        elif ((WaveLength >= 410.0) and (WaveLength <= 440.0)):
+            R =0.19-0.19*(440.0-WaveLength)/30.0
+            G = 0.0
+            B = 1.0
+
+        elif ((WaveLength >= 440.0) and (WaveLength<= 490.0)):
+            R =0
+            G = 1-(490.0-WaveLength)/50.0
+            B = 1.0
+
+        elif ((WaveLength >= 490.0) and (WaveLength <= 510.0)):
+            R =0
+            G = 1
+            B = (510.0-WaveLength)/20.0
+
+        elif ((WaveLength >= 510.0) and (WaveLength <= 580.0)):
+            R =1-(580.0-WaveLength)/70.0
+            G = 1
+            B = 0
+        elif ((WaveLength >= 580.0) and (WaveLength<= 640.0)):
+            R =1
+            G = (640-WaveLength)/60
+            B = 0
+        elif ((WaveLength >= 640.0) and (WaveLength <= 700.0)):
+            R =1
+            G = 0
+            B = 0
+        elif ((WaveLength >= 700.0) and (WaveLength<= 780.0)):
+            R =0.35+0.65*(780.0-WaveLength)/80.0
+            G = 0
+            B = 0
+        
+
+        return 255*np.array([R,G,B])
+    
+    @staticmethod
+    def rgb_to_hex(rgb):
+        """translates an rgb tuple of int to a tkinter friendly color code
+        """
+        return "#%02x%02x%02x" % rgb 
+
+    @staticmethod
+    def rgbtohex(r,g,b):
+        return f'#{r:02x}{g:02x}{b:02x}'
+
+        
 
 class AudioListener():
     is_listening = True
@@ -52,6 +120,7 @@ class AudioListener():
     a4_freq = 440
 
     CURRENT_NOTE_NAME = ''
+    CURRENT_FREQUENCY = 0
 
     NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     def __init__(self, *args, **kwargs):
@@ -137,16 +206,16 @@ class AudioListener():
                     magnitude_data[:i - 1] = 0
                     break
             # Get frequency of maximum response in range
-            freq = (round(frequencies[np.argmax(magnitude_data)], 2))
+            AudioListener.CURRENT_FREQUENCY = (round(frequencies[np.argmax(magnitude_data)], 2))
 
             # Get note number and nearest note
-            n = self.frequency_to_number(freq, 440)
+            n = self.frequency_to_number(AudioListener.CURRENT_FREQUENCY, 440)
             n0 = int(round(n))
 
             num_frames += 1
 
             if num_frames >= self.BUFFER_TIMES:
-                self.frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.number_to_note_name(n0), n-n0)
+                self.frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(AudioListener.CURRENT_FREQUENCY, self.number_to_note_name(n0), n-n0)
                 
 class App(tk.Tk):
     BG_COLOR = '#000000'
@@ -194,12 +263,14 @@ class App(tk.Tk):
         if(self.listener.is_listening == True):
             self.frequencyLabel.configure(text=self.listener.frequency)
 
-        self.frequencyLabel.after(1000, self.update)
+        self.frequencyLabel.after(10, self.update)
 
     def update_bg(self):
         while(True):
             color_code = ColorCalculator.findColor(AudioListener.CURRENT_NOTE_NAME)
-            self.configure(bg=color_code)
+            rgb_array = ColorCalculator.WaveLength_to_RGB(ColorCalculator.sound_frequency_to_wavelength(AudioListener.CURRENT_FREQUENCY))
+            color_code_from_freq = ColorCalculator.rgb_to_hex((int(rgb_array[0]), int(rgb_array[1]), int(rgb_array[2])))
+            self.configure(bg=color_code_from_freq) 
 
 if __name__ == "__main__":
     app = App()
