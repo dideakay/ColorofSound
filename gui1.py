@@ -11,39 +11,38 @@ from pyaudio import PyAudio, paInt16
 
 frequency = "Not Listening"
 class ColorCalculator():
-    global note_name_global
-
-    def findColor():
-        global bg_color
-        global note_name_global
-        if(note_name_global=="C"):
+    
+    def findColor(note_name):
+        bg_color = '#000000'
+        
+        if(note_name=="C"):
             bg_color='#28ff00'
-        elif(note_name_global=="C#"):
+        elif(note_name=="C#"):
             bg_color='#00ffe8'
-        elif(note_name_global=="D"):
+        elif(note_name=="D"):
             bg_color='#007cff'
-        elif(note_name_global=="D#"):
+        elif(note_name=="D#"):
             bg_color='#0500ff'
-        elif(note_name_global=="E"):
+        elif(note_name=="E"):
             bg_color='#4500ea'
-        elif(note_name_global=="F"):
+        elif(note_name=="F"):
             bg_color='#57009e'
-        elif(note_name_global=="F#"):
+        elif(note_name=="F#"):
             bg_color='#740000'
-        elif(note_name_global=="G"):
+        elif(note_name=="G"):
             bg_color='#b30000'
-        elif(note_name_global=="G#"):
+        elif(note_name=="G#"):
             bg_color='#ee0000'
-        elif(note_name_global=="A"):
+        elif(note_name=="A"):
             bg_color='#ff6300'
-        elif(note_name_global=="A#"):
+        elif(note_name=="A#"):
             bg_color='#ffec00'
         else:
             bg_color='#99ff00'
+        return bg_color
 
 class AudioListener():
     is_listening = True
-    global note_name_global
 
     SAMPLING_RATE = 48000  # mac hardware: 44100, 48000, 96000
     CHUNK_SIZE = 1024  # number of samples
@@ -52,6 +51,8 @@ class AudioListener():
     NUM_HPS = 3  # Harmonic Product Spectrum
     a4_freq = 440
 
+    CURRENT_NOTE_NAME = ''
+
     NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     def __init__(self, *args, **kwargs):
         
@@ -59,7 +60,8 @@ class AudioListener():
         self.buffer = np.zeros(self.CHUNK_SIZE * self.BUFFER_TIMES)
         self.hanning_window = np.hanning(len(self.buffer))
         self.running = False
-
+        self.frequency = 0
+        
         self.audio_object = PyAudio()
         self.stream = self.audio_object.open(format=paInt16,
                                                 channels=1,
@@ -87,21 +89,18 @@ class AudioListener():
     @staticmethod
     def number_to_note_name(number):
         """ converts a note number to a note name (for example: 69 returns 'A', 70 returns 'A#', ... ) """
-        global note_name_global
-        note_name_global = AudioListener.NOTE_NAMES[int(round(number) % 12)] 
-        return note_name_global + str(number/12 - 1)
+        AudioListener.CURRENT_NOTE_NAME = AudioListener.NOTE_NAMES[int(round(number) % 12)] 
+        return AudioListener.CURRENT_NOTE_NAME + str(number/12 - 1)
 
     @staticmethod
     def frequency_to_note_name(frequency, a4_freq):
         """ converts frequency to note name (for example: 440 returns 'A') """
-        global note_name_global
         number = AudioListener.frequency_to_number(frequency, a4_freq)
         note_name = AudioListener.number_to_note_name(number)
         return note_name
            
     def listenLoop(self, mainApp):
         self.running = True
-        global frequency
         num_frames = 0
         self.stream.start_stream()
 
@@ -147,14 +146,10 @@ class AudioListener():
             num_frames += 1
 
             if num_frames >= self.BUFFER_TIMES:
-                frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.number_to_note_name(n0), n-n0)
+                self.frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.number_to_note_name(n0), n-n0)
                 
 class App(tk.Tk):
-    global frequency
-    global bg_color
-    global note_name_global
-    note_name_global = 'G'
-    bg_color = '#40E0D0'
+    BG_COLOR = '#000000'
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -197,15 +192,14 @@ class App(tk.Tk):
     def update(self):
     # update the label every 1 second 
         if(self.listener.is_listening == True):
-            self.frequencyLabel.configure(text=frequency)
+            self.frequencyLabel.configure(text=self.listener.frequency)
 
-        # schedule another timer
         self.frequencyLabel.after(1000, self.update)
 
     def update_bg(self):
         while(True):
-            ColorCalculator.findColor()
-            self.configure(bg=bg_color)
+            color_code = ColorCalculator.findColor(AudioListener.CURRENT_NOTE_NAME)
+            self.configure(bg=color_code)
 
 if __name__ == "__main__":
     app = App()
