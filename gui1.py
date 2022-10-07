@@ -5,7 +5,6 @@ import threading
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk
-from turtle import bgcolor
 import numpy as np
 import pyaudio
 from pyaudio import PyAudio, paInt16
@@ -138,24 +137,17 @@ class AudioListener():
                 if freq > 60:
                     magnitude_data[:i - 1] = 0
                     break
-            # put the frequency of the loudest tone into the queue
-                #self.queue.put(round(frequencies[np.argmax(magnitude_data)], 2))
-
             # Get frequency of maximum response in range
             freq = (round(frequencies[np.argmax(magnitude_data)], 2))
-            #(np.abs(fft[self.imin:self.imax]).argmax() + self.imin) * self.FREQ_STEP
 
             # Get note number and nearest note
             n = self.frequency_to_number(freq, 440)
             n0 = int(round(n))
-            # Console output once we have a full buffer
-            num_frames += 1
 
-            #AudioListener.note_to_rgb()
+            num_frames += 1
 
             if num_frames >= self.BUFFER_TIMES:
                 frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(freq, self.number_to_note_name(n0), n-n0)
-                print(frequency)
                 
 class App(tk.Tk):
     global frequency
@@ -166,19 +158,12 @@ class App(tk.Tk):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
-        # configure the root window
         self.title('Dides Tuner')
         self.geometry('400x150')
-        
-        
-        #self.configure(bg=bg_color)
-        #self.update_bg()
 
-        # label
         self.label = tk.Label(self, text='Hello, Press to start!')
         self.label.pack()
-        
-        # buttons
+
         self.btnStart = tk.Button(self, text="Start", command=lambda: self.start_clicked())
         self.btnStart.pack()
 
@@ -213,7 +198,6 @@ class App(tk.Tk):
     # update the label every 1 second 
         if(self.listener.is_listening == True):
             self.frequencyLabel.configure(text=frequency)
-            #self.configure(bg=bg_color)
 
         # schedule another timer
         self.frequencyLabel.after(1000, self.update)
@@ -222,10 +206,6 @@ class App(tk.Tk):
         while(True):
             ColorCalculator.findColor()
             self.configure(bg=bg_color)
-            print("----------------------------------------------------------------------")
-            print(bg_color)
-
-    
 
 if __name__ == "__main__":
     app = App()
