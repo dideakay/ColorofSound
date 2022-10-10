@@ -44,19 +44,26 @@ class ColorCalculator():
     
     @staticmethod
     def sound_frequency_to_wavelength(frequency):
-        for i in range(0,50):
+        c=299792458
+        #print(frequency)
+        for i in range(30,50):
             upper_octave_freq=frequency*math.pow(2, i)
-            upper_octave_freq_THz=upper_octave_freq/(math.pow(10,12))
-            upper_octave_freq_wavelenght=upper_octave_freq_THz*100
-            if(upper_octave_freq_wavelenght>= 380.0 and upper_octave_freq_wavelenght<= 780.0):
-                return upper_octave_freq_wavelenght
-        return 0
+            upper_octave_freq_THz=(upper_octave_freq/(math.pow(10,12)))
+            AudioListener.CURRENT_FREQUENCY_THZ = upper_octave_freq_THz
 
-
+            if(upper_octave_freq_THz>= 380.0 and upper_octave_freq_THz<= 770.0):
+                if(upper_octave_freq_THz != 0.0):
+                    wavelenght=(c/upper_octave_freq)*math.pow(10,9) #wavelenght in nanometer
+                    App.wavelenght=wavelenght
+                    AudioListener.CURRENT_OCTAVE=i
+                    print("upper freq: {0} THz \t wavelenght: {1}".format(str(upper_octave_freq_THz), str(wavelenght)))
+        
+        
     def WaveLength_to_RGB(WaveLength):
-        R = 0
-        G = 0
-        B = 0
+        #print(WaveLength)
+        R=App.R / 255
+        G=App.G / 255
+        B=App.B/ 255
         if ((WaveLength >= 380.0) and (WaveLength <= 410.0)):
             R =0.6-0.41*(410.0-WaveLength)/30.0
             G = 0.0
@@ -94,8 +101,12 @@ class ColorCalculator():
             G = 0
             B = 0
         
-
-        return 255*np.array([R,G,B])
+        result=255*np.array([R,G,B])
+        #print(result)
+        App.R = R * 255
+        App.G = G * 255
+        App.B = B * 255
+        return result
     
     @staticmethod
     def rgb_to_hex(rgb):
@@ -121,6 +132,8 @@ class AudioListener():
 
     CURRENT_NOTE_NAME = ''
     CURRENT_FREQUENCY = 0
+    CURRENT_FREQUENCY_THZ = 0
+    CURRENT_OCTAVE = 0
 
     NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     def __init__(self, *args, **kwargs):
@@ -206,19 +219,25 @@ class AudioListener():
                     magnitude_data[:i - 1] = 0
                     break
             # Get frequency of maximum response in range
-            AudioListener.CURRENT_FREQUENCY = (round(frequencies[np.argmax(magnitude_data)], 2))
+            frequency = (round(frequencies[np.argmax(magnitude_data)], 2))
 
             # Get note number and nearest note
-            n = self.frequency_to_number(AudioListener.CURRENT_FREQUENCY, 440)
+            n = self.frequency_to_number(frequency, 440)
             n0 = int(round(n))
 
             num_frames += 1
 
             if num_frames >= self.BUFFER_TIMES:
-                self.frequency = 'freq: {:7.2f} Hz     note: {:>3s} {:+.2f}'.format(AudioListener.CURRENT_FREQUENCY, self.number_to_note_name(n0), n-n0)
+                AudioListener.CURRENT_FREQUENCY = frequency
+                self.frequency = 'note: {:>3s} {:+.2f} \n freq: {:7.2f} Hz \n {}th octave freq: {:7.2f} THz'.format(self.number_to_note_name(n0), n-n0, AudioListener.CURRENT_FREQUENCY, AudioListener.CURRENT_OCTAVE, AudioListener.CURRENT_FREQUENCY_THZ)
+                
                 
 class App(tk.Tk):
     BG_COLOR = '#000000'
+    R = 0
+    G = 0
+    B = 0
+    wavelenght=0
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -236,14 +255,14 @@ class App(tk.Tk):
 
         self.frequencyLabel = tk.Label(self, text=frequency)
         self.frequencyLabel.pack()
-        self.frequencyLabel.after(1000, self.update)
+        self.frequencyLabel.after(100, self.update)
 
         self.listener = AudioListener()
         self.listenLoopThread = threading.Thread(target=lambda: self.listener.listenLoop(self), daemon=True)
         self.bgColorThread = threading.Thread(target=lambda: self.update_bg() , daemon=True)
         
     def stop_clicked(self):
-        print(frequency)
+        #print(frequency)
         self.listener.is_listening = False
         self.listenLoopThread.join()
         self.listenLoopThread = threading.Thread(target= lambda: self.listener.listenLoop(self), daemon=True)
@@ -263,13 +282,15 @@ class App(tk.Tk):
         if(self.listener.is_listening == True):
             self.frequencyLabel.configure(text=self.listener.frequency)
 
-        self.frequencyLabel.after(10, self.update)
+        self.frequencyLabel.after(100, self.update)
 
     def update_bg(self):
         while(True):
-            color_code = ColorCalculator.findColor(AudioListener.CURRENT_NOTE_NAME)
-            rgb_array = ColorCalculator.WaveLength_to_RGB(ColorCalculator.sound_frequency_to_wavelength(AudioListener.CURRENT_FREQUENCY))
-            color_code_from_freq = ColorCalculator.rgb_to_hex((int(rgb_array[0]), int(rgb_array[1]), int(rgb_array[2])))
+            ColorCalculator.sound_frequency_to_wavelength(AudioListener.CURRENT_FREQUENCY)
+            ColorCalculator.WaveLength_to_RGB(App.wavelenght)
+            color_code_from_freq = ColorCalculator.rgb_to_hex((int(App.R),
+                                                                int(App.G),
+                                                                int(App.B)))
             self.configure(bg=color_code_from_freq) 
 
 if __name__ == "__main__":
