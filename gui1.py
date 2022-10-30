@@ -1,4 +1,5 @@
 import copy
+from multiprocessing.connection import Listener
 import os
 import sys
 import threading
@@ -11,41 +12,12 @@ from pyaudio import PyAudio, paInt16
 import math
 
 frequency = "Not Listening"
+
 class ColorCalculator():
-    
-    def findColor(note_name):
-        bg_color = '#000000'
-        
-        if(note_name=="C"):
-            bg_color='#28ff00'
-        elif(note_name=="C#"):
-            bg_color='#00ffe8'
-        elif(note_name=="D"):
-            bg_color='#007cff'
-        elif(note_name=="D#"):
-            bg_color='#0500ff'
-        elif(note_name=="E"):
-            bg_color='#4500ea'
-        elif(note_name=="F"):
-            bg_color='#57009e'
-        elif(note_name=="F#"):
-            bg_color='#740000'
-        elif(note_name=="G"):
-            bg_color='#b30000'
-        elif(note_name=="G#"):
-            bg_color='#ee0000'
-        elif(note_name=="A"):
-            bg_color='#ff6300'
-        elif(note_name=="A#"):
-            bg_color='#ffec00'
-        else:
-            bg_color='#99ff00'
-        return bg_color
     
     @staticmethod
     def sound_frequency_to_wavelength(frequency):
-        c=299792458
-        #print(frequency)
+        c=299792458 #speed of light
         for i in range(30,50):
             upper_octave_freq=frequency*math.pow(2, i)
             upper_octave_freq_THz=(upper_octave_freq/(math.pow(10,12)))
@@ -60,7 +32,6 @@ class ColorCalculator():
         
         
     def WaveLength_to_RGB(WaveLength):
-        #print(WaveLength)
         R=App.R / 255
         G=App.G / 255
         B=App.B/ 255
@@ -102,7 +73,6 @@ class ColorCalculator():
             B = 0
         
         result=255*np.array([R,G,B])
-        #print(result)
         App.R = R * 255
         App.G = G * 255
         App.B = B * 255
@@ -110,16 +80,8 @@ class ColorCalculator():
     
     @staticmethod
     def rgb_to_hex(rgb):
-        """translates an rgb tuple of int to a tkinter friendly color code
-        """
         return "#%02x%02x%02x" % rgb 
-
-    @staticmethod
-    def rgbtohex(r,g,b):
-        return f'#{r:02x}{g:02x}{b:02x}'
-
         
-
 class AudioListener():
     is_listening = True
 
@@ -180,57 +142,62 @@ class AudioListener():
         number = AudioListener.frequency_to_number(frequency, a4_freq)
         note_name = AudioListener.number_to_note_name(number)
         return note_name
-           
-    def listenLoop(self, mainApp):
-        self.running = True
-        num_frames = 0
-        self.stream.start_stream()
 
-        while (self.stream.is_active() and self.is_listening and self.running):
-            
-            # read microphone data
-            data = self.stream.read(self.CHUNK_SIZE, exception_on_overflow=False)
-            data = np.frombuffer(data, dtype=np.int16)
+    class listenLoop(threading.Thread):
+        def __init__(self, audio_listener_instance):
+            threading.Thread.__init__(self)
+            self.parent = audio_listener_instance
 
-            # Shift the buffer down and new data in
-            self.buffer[:-self.CHUNK_SIZE] = self.buffer[self.CHUNK_SIZE:]
-            self.buffer[-self.CHUNK_SIZE:] = data
+        def run(self):
+            self.running = True
+            num_frames = 0
+            self.parent.stream.start_stream()
 
-            # apply the fourier transformation on the whole buffer (with zero-padding + hanning window)
-            magnitude_data = abs(np.fft.fft(np.pad(self.buffer * self.hanning_window,
-                                                    (0, len(self.buffer) * self.ZERO_PADDING),
-                                                    "constant")))
-            # only use the first half of the fft output data
-            magnitude_data = magnitude_data[:int(len(magnitude_data) / 2)]
-
-            # HPS: multiply data by itself with different scalings (Harmonic Product Spectrum)
-            magnitude_data_orig = copy.deepcopy(magnitude_data)
-            for i in range(2, self.NUM_HPS+1, 1):
-                hps_len = int(np.ceil(len(magnitude_data) / i))
-                magnitude_data[:hps_len] *= magnitude_data_orig[::i]  # multiply every i element
-
-            # get the corresponding frequency array
-            frequencies = np.fft.fftfreq(int((len(magnitude_data) * 2) / 1),
-                                            1. / self.SAMPLING_RATE)
-
-            # set magnitude of all frequencies below 60Hz to zero
-            for i, freq in enumerate(frequencies):
-                if freq > 60:
-                    magnitude_data[:i - 1] = 0
-                    break
-            # Get frequency of maximum response in range
-            frequency = (round(frequencies[np.argmax(magnitude_data)], 2))
-
-            # Get note number and nearest note
-            n = self.frequency_to_number(frequency, 440)
-            n0 = int(round(n))
-
-            num_frames += 1
-
-            if num_frames >= self.BUFFER_TIMES:
-                AudioListener.CURRENT_FREQUENCY = frequency
-                self.frequency = 'note: {:>3s} {:+.2f} \n freq: {:7.2f} Hz \n {}th octave freq: {:7.2f} THz'.format(self.number_to_note_name(n0), n-n0, AudioListener.CURRENT_FREQUENCY, AudioListener.CURRENT_OCTAVE, AudioListener.CURRENT_FREQUENCY_THZ)
+            while (self.parent.stream.is_active() and self.parent.is_listening and self.running):
                 
+                # read microphone data
+                data = self.parent.stream.read(self.parent.CHUNK_SIZE, exception_on_overflow=False)
+                data = np.frombuffer(data, dtype=np.int16)
+
+                # Shift the buffer down and new data in
+                self.parent.buffer[:-self.parent.CHUNK_SIZE] = self.parent.buffer[self.parent.CHUNK_SIZE:]
+                self.parent.buffer[-self.parent.CHUNK_SIZE:] = data
+
+                # apply the fourier transformation on the whole buffer (with zero-padding + hanning window)
+                magnitude_data = abs(np.fft.fft(np.pad(self.parent.buffer * self.parent.hanning_window,
+                                                        (0, len(self.parent.buffer) * self.parent.ZERO_PADDING),
+                                                        "constant")))
+                # only use the first half of the fft output data
+                magnitude_data = magnitude_data[:int(len(magnitude_data) / 2)]
+
+                # HPS: multiply data by itself with different scalings (Harmonic Product Spectrum)
+                magnitude_data_orig = copy.deepcopy(magnitude_data)
+                for i in range(2, self.parent.NUM_HPS+1, 1):
+                    hps_len = int(np.ceil(len(magnitude_data) / i))
+                    magnitude_data[:hps_len] *= magnitude_data_orig[::i]  # multiply every i element
+
+                # get the corresponding frequency array
+                frequencies = np.fft.fftfreq(int((len(magnitude_data) * 2) / 1),
+                                                1. / self.parent.SAMPLING_RATE)
+
+                # set magnitude of all frequencies below 60Hz to zero
+                for i, freq in enumerate(frequencies):
+                    if freq > 60:
+                        magnitude_data[:i - 1] = 0
+                        break
+                # Get frequency of maximum response in range
+                frequency = (round(frequencies[np.argmax(magnitude_data)], 2))
+
+                # Get note number and nearest note
+                n = self.parent.frequency_to_number(frequency, 440)
+                n0 = int(round(n))
+
+                num_frames += 1
+
+                if num_frames >= self.parent.BUFFER_TIMES:
+                    AudioListener.CURRENT_FREQUENCY = frequency
+                    self.parent.frequency = 'note: {:>3s} {:+.2f} \n freq: {:7.2f} Hz \n {}th octave freq: {:7.2f} THz'.format(self.parent.number_to_note_name(n0), n-n0, AudioListener.CURRENT_FREQUENCY, AudioListener.CURRENT_OCTAVE, AudioListener.CURRENT_FREQUENCY_THZ)
+                    
                 
 class App(tk.Tk):
     BG_COLOR = '#000000'
@@ -258,27 +225,27 @@ class App(tk.Tk):
         self.frequencyLabel.after(100, self.update)
 
         self.listener = AudioListener()
-        self.listenLoopThread = threading.Thread(target=lambda: self.listener.listenLoop(self), daemon=True)
+        self.listenLoopThread = self.listener.listenLoop(self.listener)   #threading.Thread(target=lambda: self.listener.listenLoop(), daemon=True)
+        
         self.bgColorThread = threading.Thread(target=lambda: self.update_bg() , daemon=True)
+        self.bgColorThread.start()
         
     def stop_clicked(self):
-        #print(frequency)
         self.listener.is_listening = False
         self.listenLoopThread.join()
-        self.listenLoopThread = threading.Thread(target= lambda: self.listener.listenLoop(self), daemon=True)
         self.btnStart['state'] = NORMAL
         self.btnStop['state'] = DISABLED
         self.frequencyLabel["text"]="Not Listening"
         
     def start_clicked(self):
         self.listener.is_listening = True
+        self.listenLoopThread = self.listener.listenLoop(self.listener)
         self.listenLoopThread.start()
-        self.bgColorThread.start()
         self.btnStart['state'] = DISABLED
         self.btnStop['state'] = NORMAL
     
     def update(self):
-    # update the label every 1 second 
+    # update the label every 0.1 second 
         if(self.listener.is_listening == True):
             self.frequencyLabel.configure(text=self.listener.frequency)
 
