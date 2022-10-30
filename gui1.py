@@ -5,9 +5,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import *
-from tkinter import ttk
 import numpy as np
-import pyaudio
 from pyaudio import PyAudio, paInt16
 import math
 
@@ -105,6 +103,7 @@ class AudioListener():
         self.hanning_window = np.hanning(len(self.buffer))
         self.running = False
         self.frequency = 0
+        
         
         self.audio_object = PyAudio()
         self.stream = self.audio_object.open(format=paInt16,
@@ -225,13 +224,16 @@ class App(tk.Tk):
         self.frequencyLabel.after(100, self.update)
 
         self.listener = AudioListener()
-        self.listenLoopThread = self.listener.listenLoop(self.listener)   #threading.Thread(target=lambda: self.listener.listenLoop(), daemon=True)
+        self.listenLoopThread = self.listener.listenLoop(self.listener)
+
+        self.bg_running = False
         
-        self.bgColorThread = threading.Thread(target=lambda: self.update_bg() , daemon=True)
-        self.bgColorThread.start()
+         #threading.Thread(target=lambda: self.update_bg() , daemon=True)
+        
         
     def stop_clicked(self):
         self.listener.is_listening = False
+        self.bg_running = False
         self.listenLoopThread.join()
         self.btnStart['state'] = NORMAL
         self.btnStop['state'] = DISABLED
@@ -239,8 +241,11 @@ class App(tk.Tk):
         
     def start_clicked(self):
         self.listener.is_listening = True
+        self.bg_running = True
         self.listenLoopThread = self.listener.listenLoop(self.listener)
         self.listenLoopThread.start()
+        self.bgColorThread = self.update_bg(self)  
+        self.bgColorThread.start()
         self.btnStart['state'] = DISABLED
         self.btnStop['state'] = NORMAL
     
@@ -251,14 +256,19 @@ class App(tk.Tk):
 
         self.frequencyLabel.after(100, self.update)
 
-    def update_bg(self):
-        while(True):
-            ColorCalculator.sound_frequency_to_wavelength(AudioListener.CURRENT_FREQUENCY)
-            ColorCalculator.WaveLength_to_RGB(App.wavelenght)
-            color_code_from_freq = ColorCalculator.rgb_to_hex((int(App.R),
-                                                                int(App.G),
-                                                                int(App.B)))
-            self.configure(bg=color_code_from_freq) 
+    class update_bg(threading.Thread):
+        def __init__(self, main_app_instance):
+            threading.Thread.__init__(self)
+            self.parent = main_app_instance
+            
+        def run(self):
+            while(self.parent.bg_running):
+                ColorCalculator.sound_frequency_to_wavelength(AudioListener.CURRENT_FREQUENCY)
+                ColorCalculator.WaveLength_to_RGB(self.parent.wavelenght)
+                color_code_from_freq = ColorCalculator.rgb_to_hex((int(App.R),
+                                                                    int(App.G),
+                                                                    int(App.B)))
+                self.parent.configure(bg=color_code_from_freq) 
 
 if __name__ == "__main__":
     app = App()
