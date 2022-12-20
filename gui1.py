@@ -26,8 +26,6 @@ class ColorCalculator():
                     wavelenght=(c/upper_octave_freq)*math.pow(10,9) #wavelenght in nanometer
                     App.wavelenght=wavelenght
                     AudioListener.CURRENT_OCTAVE=i
-                    print("upper freq: {0} THz \t wavelenght: {1}".format(str(upper_octave_freq_THz), str(wavelenght)))
-        
         
     def WaveLength_to_RGB(WaveLength):
         R=App.R / 255
@@ -85,7 +83,7 @@ class AudioListener():
 
     SAMPLING_RATE = 48000  # mac hardware: 44100, 48000, 96000
     CHUNK_SIZE = 1024  # number of samples
-    BUFFER_TIMES = 50  # buffer length = CHUNK_SIZE * BUFFER_TIMES
+    BUFFER_TIMES = 10  # buffer length = CHUNK_SIZE * BUFFER_TIMES
     ZERO_PADDING = 3  # times the buffer length
     NUM_HPS = 3  # Harmonic Product Spectrum
     a4_freq = 440
@@ -94,6 +92,7 @@ class AudioListener():
     CURRENT_FREQUENCY = 0
     CURRENT_FREQUENCY_THZ = 0
     CURRENT_OCTAVE = 0
+    FREQUENCY_LABEL = ''
 
     NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     def __init__(self, *args, **kwargs):
@@ -103,7 +102,6 @@ class AudioListener():
         self.hanning_window = np.hanning(len(self.buffer))
         self.running = False
         self.frequency = 0
-        
         
         self.audio_object = PyAudio()
         self.stream = self.audio_object.open(format=paInt16,
@@ -188,15 +186,14 @@ class AudioListener():
                 frequency = (round(frequencies[np.argmax(magnitude_data)], 2))
 
                 # Get note number and nearest note
-                n = self.parent.frequency_to_number(frequency, 440)
+                n = AudioListener.frequency_to_number(frequency, int(AudioListener.a4_freq))
                 n0 = int(round(n))
 
                 num_frames += 1
 
                 if num_frames >= self.parent.BUFFER_TIMES:
                     AudioListener.CURRENT_FREQUENCY = frequency
-                    self.parent.frequency = 'note: {:>3s} {:+.2f} \n freq: {:7.2f} Hz \n {}th octave freq: {:7.2f} THz'.format(self.parent.number_to_note_name(n0), n-n0, AudioListener.CURRENT_FREQUENCY, AudioListener.CURRENT_OCTAVE, AudioListener.CURRENT_FREQUENCY_THZ)
-                    
+                    self.parent.frequency = 'note: {:s} \n freq: {:7.2f} Hz'.format(self.parent.number_to_note_name(n0).split('.')[0], AudioListener.CURRENT_FREQUENCY)
                 
 class App(tk.Tk):
     BG_COLOR = '#000000'
@@ -227,10 +224,7 @@ class App(tk.Tk):
         self.listenLoopThread = self.listener.listenLoop(self.listener)
 
         self.bg_running = False
-        
-         #threading.Thread(target=lambda: self.update_bg() , daemon=True)
-        
-        
+
     def stop_clicked(self):
         self.listener.is_listening = False
         self.bg_running = False
@@ -268,7 +262,7 @@ class App(tk.Tk):
                 color_code_from_freq = ColorCalculator.rgb_to_hex((int(App.R),
                                                                     int(App.G),
                                                                     int(App.B)))
-                self.parent.configure(bg=color_code_from_freq) 
+                self.parent.configure(bg=color_code_from_freq)
 
 if __name__ == "__main__":
     app = App()
